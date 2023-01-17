@@ -1,0 +1,88 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Security Group for ship-planner-pritunl EC2 Instance
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Environment Name
+        Parameters:
+          - EnvironmentName
+      - Label:
+          default: Network Configuration
+        Parameters:
+          - CidrIp
+          - PritunlPort
+
+Parameters:
+
+  VPCInfraStackName:
+    Description: Name of an active CloudFormation stack that contains the networking
+      resources, such as the ship-planner-vpc-infra, that will be used in this
+      stack.
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+    Default: ship-planner-infra-vpc # ship-planner-infra-vpc EnvironmentName
+
+  EnvironmentName:
+    Description: An environment name that will be prefixed to resource names
+    Type: String
+    Default: ship-planner-pritunl-vpn-sg
+
+  PritunlPort:
+    Type: String
+    Default: '13219'
+    Description: Enter Custom Port to use for Pritunl OpenVPN
+
+  CidrIp:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR IP to be granted access by the SG, use 0.0.0.0/0 to accept all IPs
+
+Resources:
+
+  AWSPritunlVPNSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SG for OpenVPN Server
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: ${VPCInfraStackName}-VPC # from ship-planner-vpc.yaml EnvironmentName
+      SecurityGroupIngress:
+        - IpProtocol: udp
+          FromPort: 1194
+          ToPort: 1194
+          CidrIp:
+            Ref: CidrIp
+        - IpProtocol: udp
+          FromPort:
+            Ref: PritunlPort
+          ToPort:
+            Ref: PritunlPort
+          CidrIp:
+            Ref: CidrIp
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp:
+            Ref: CidrIp
+          Description: Pritunl https port
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Ref: CidrIp
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-PritunlVPN-SG
+
+Outputs:
+
+  AWSPritunlVPNSecurityGroup:
+    Description: A reference to the security group for Pritunl VPN
+    Value: !Ref AWSPritunlVPNSecurityGroup
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-SecurityGroupID

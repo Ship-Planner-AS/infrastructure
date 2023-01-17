@@ -1,0 +1,58 @@
+## =================== VERSION =======================
+AWSTemplateFormatVersion: '2010-09-09'
+
+## =================== DESCRIPTION ===================
+Description: >-
+  AWS CloudFormation template
+  Create an CloudFormation IAM User and optionally attach it to IAM group(s)
+
+## =================== PARAMETERS ===================
+Parameters:
+  IAMUserName:
+    Description: Unique name for a new user
+    Type: String
+    Default: ship-planner-aws-staging-user-cloud-formation
+    ConstraintDescription: User name must be between 1 and 64 alphanumeric characters in length, starting with an uppercase or lowercase character of the alphabet.
+  AWSSecurityGroups:
+    Description: 'Comma-delimited list of group names  to which you want to add the user (optional)'
+    Type: CommaDelimitedList
+    Default: MyApricotCloudFormationUserGroups
+  TagValue:
+    Description: Tag value that identifies resources as a target for deployments
+    Type: String
+    Default: ship-planner-iam
+    AllowedPattern: "[\\x20-\\x7E]*"
+    ConstraintDescription: Must contain only ASCII characters
+
+## =================== CONDITIONS ===================
+Conditions:
+  hasGroups: # check if at list one group was specified as an input parameter
+    !Not [!Equals [ !Join ['', !Ref AWSSecurityGroups], '' ] ]
+
+## =================== RESOURCES ===================
+Resources:
+  CloudFormationUserCredentials:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Ref IAMUserName # give a name to this user
+      Groups: !If [ hasGroups, !Ref AWSSecurityGroups, !Ref AWS::NoValue] # attach this user to the list of specified groups if any
+      Tags:
+        - Key: Name
+          Value: !Ref TagValue
+  UserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref CloudFormationUserCredentials
+
+## =================== OUTPUT ===================
+Outputs:
+  outputName:
+    Description: User name
+    Value: !Ref CloudFormationUserCredentials
+  outputArn:
+    Description: User ARN
+    Value: !GetAtt CloudFormationUserCredentials.Arn
+  AccessKeyID:
+    Value: !Ref UserAccessKey
+  SecretAccessKey:
+    Value: !GetAtt UserAccessKey.SecretAccessKey

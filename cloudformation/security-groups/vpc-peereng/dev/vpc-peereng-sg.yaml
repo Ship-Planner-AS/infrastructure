@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: 'VPC peereeng SG for ship-planner-vpc'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Environment Name
+        Parameters:
+          - EnvironmentName
+      - Label:
+          default: Network Configuration
+        Parameters:
+          - CidrIp
+      - Label:
+          default: Parent Stack
+        Parameters:
+          - VPCDevStackName
+
+Parameters:
+
+  EnvironmentName:
+    Description: 'An environment name that will be prefixed to resource names'
+    Type: String
+    Default: ship-planner-vpc-peereng-dev-sg  
+  
+  CidrIp :
+    Type: String
+    Description: range of IP addresses that have access
+    Default: 0.0.0.0/0
+
+  VPCDevStackName:
+    Description: 'Name of an active CloudFormation stack that contains the resources, such as the Security Group for ship-planner-dev-peereng-connection,
+      that will be used in this stack.'
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+    Default: ship-planner-dev-vpc # from ship-planner-dev-vpc.yaml ship-planner-dev-vpc EnvironmentName
+
+Resources:
+
+  AWSVPCPeerengAllTrafficSecurityGroup :
+    Description: 'Security Group for VPC Peereng Conection'
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Open Ports to specific IP
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: ${VPCDevStackName}-VPC # from ship-planner-dev-vpc
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          CidrIp: !Ref CidrIp
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: !Ref CidrIp
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}
+
+Outputs:
+
+  ECSServicesSecurityGroup:
+    Description: 'A reference to the security group for AWSVPCPeerengAllTrafficSecurityGroup'
+    Value: !Ref AWSVPCPeerengAllTrafficSecurityGroup
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-AWSVPCPeerengAllTrafficSecurityGroup

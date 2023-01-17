@@ -1,0 +1,405 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create Pritunl VPN resources for infra MyApricot
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: EC2 Configuration
+        Parameters:
+          - EnvironmentName
+          - InstanceType
+          - KeyName
+    ParameterLabels:
+      EnvironmentName:
+        default: Environment Name
+      KeyName:
+        default: Existing Key Pair
+      ClientIPCIDR:
+        default: Provide CIDR
+
+Parameters:
+
+  EnvironmentName:
+    Type: String
+    Description: 'An environment name that will be prefixed to resource names'
+    Default: ship-planner-pritunl-vpn
+
+  KeyName:
+    Description: 'Name of an existing EC2 KeyPair to enable SSH access into the server'
+    Type: String
+    Default: pritunl
+    
+  S3Name:
+    Description: 'Name of S3 bucket for Pritunl VPN'
+    Type: String
+    Default: ship-planner-pritunl-secret
+  
+  AWSPritunlVPNSecurityGroupStackName:
+    Description: 'Name of an active CloudFormation stack that contains the Security Group
+      resources, such as the ship-planner-pritunl-vpn-sg, that will be used in this
+      stack.'
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+    Default: ship-planner-pritunl-vpn-sg # ship-planner-pritunl-vpn-sg EnvironmentName
+
+  AWSVPCInfraStackName:
+    Description: 'Name of an active CloudFormation stack that contains the VPC
+      resources, such as the ship-planner-vpc-infra, that will be used in this
+      stack.'
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+    Default: ship-planner-infra-vpc # ship-planner-infra-vpc EnvironmentName
+
+  InstanceType:
+    Description: 'Amazon EC2 instance type'
+    Type: String
+    Default: t3a.micro
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3a.micro
+      - t3a.small
+      - t3a.medium
+    ConstraintDescription: must be a valid EC2 instance type.
+
+Mappings:
+
+  RegionMap:
+    us-east-1:
+      AMAZONLINUXAMI: ami-b70554c8
+    us-east-2:
+      AMAZONLINUXAMI: ami-8c122be9
+    us-west-1:
+      AMAZONLINUXAMI: ami-e0ba5c83
+    eu-west-1:
+      AMAZONLINUXAMI: ami-466768ac
+    eu-west-2:
+      AMAZONLINUXAMI: ami-b8b45ddf
+    ap-southeast-1:
+      AMAZONLINUXAMI: ami-05868579
+    ap-southeast-2:
+      AMAZONLINUXAMI: ami-39f8215b
+    eu-central-1:
+      AMAZONLINUXAMI: ami-076309742d466ad69
+
+Resources:
+
+  EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}
+
+  AssociateManagementAccessPort:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - EIP
+          - AllocationId
+      NetworkInterfaceId:
+        Ref: NetworkInterface
+
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+
+  AccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: AccessPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetBucketLocation
+            Resource:
+              Fn::Sub: arn:aws:s3:::${S3Bucket}
+          - Effect: Allow
+            Action:
+              - ec2:DescribeInstances
+              - ec2:CreateTags
+              - ec2:DescribeVolumes
+              - ec2:DescribeInstanceTypes
+              - ec2:RunInstances
+              - ec2:DescribeInstanceStatus
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:PutObjectAcl
+              - s3:GetObject
+              - s3:GetObjectAcl
+              - s3:DeleteObject
+            Resource:
+              - Fn::Sub: arn:aws:s3:::${S3Bucket}/*
+      Roles:
+        - Ref: EC2InstanceRole
+
+  ec2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - Ref: EC2InstanceRole
+
+  NetworkInterface:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: OpenVPN Server Interface
+      GroupSet:
+        - Fn::ImportValue:
+            Fn::Sub: ${AWSPritunlVPNSecurityGroupStackName}-SecurityGroupID # from bastion-host-sg
+      SubnetId:
+        Fn::ImportValue:
+          Fn::Sub: ${AWSVPCInfraStackName}-PublicSubnet # from cloudformation/VPC/infra-vpc/ship-planner-vpc.yaml
+      SourceDestCheck: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Ref: S3Name
+      AccessControl: Private
+
+  EC2OpenVPNInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      DisableApiTermination: false
+      ImageId:
+        Fn::FindInMap:
+          - RegionMap
+          - Ref: AWS::Region
+          - AMAZONLINUXAMI
+      BlockDeviceMappings:
+        - DeviceName: "/dev/xvda"
+          Ebs:
+            VolumeType: gp3
+            DeleteOnTermination: 'false'
+            VolumeSize: '10'
+      InstanceType: 
+        Ref: InstanceType  
+      KeyName:
+        Ref: KeyName
+      NetworkInterfaces:
+        - NetworkInterfaceId:
+            Ref: NetworkInterface
+          DeviceIndex: 0
+      IamInstanceProfile:
+        Ref: ec2InstanceProfile
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}
+
+      UserData:
+        Fn::Base64:
+          Fn::Sub: |-
+            #!/bin/bash
+            yum update -y aws-cfn-bootstrap
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource EC2OpenVPNInstance --configsets CfnConfigSet --region ${AWS::Region}
+            yum -y update
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource EC2OpenVPNInstance --region ${AWS::Region}
+            EC2_INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+            EC2_AVAIL_ZONE=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
+            VOLUME_ID=$(aws ec2 describe-volumes --filters Name=attachment.instance-id,Values=$EC2_INSTANCE_ID Name=attachment.device,Values=/dev/xvda --query 'Volumes[*].[VolumeId]' --region ${AWS::Region} --out text | cut -f 1)
+            aws ec2 create-tags --resources $VOLUME_ID --tags Key=Name,Value=${EnvironmentName} --region ${AWS::Region}
+
+    CreationPolicy:
+      ResourceSignal:
+        Count: '1'
+        Timeout: PT30M
+
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          CfnConfigSet:
+            - configure_cfn
+            - install_software
+            - run
+            - password
+            - upload_files
+            - clear_files
+
+        configure_cfn:
+          files:
+            "/etc/cfn/hooks.d/cfn-auto-reloader.conf":
+              content:
+                Fn::Sub: |
+                  [cfn-auto-reloader-hook]
+                  triggers=post.update
+                  path=Resources.EC2OpenVPNInstance.Metadata.AWS::CloudFormation::Init
+                  action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource EC2OpenVPNInstance --configsets CfnConfigSet --region ${AWS::Region}
+              mode: '000400'
+              owner: root
+              group: root
+            "/etc/cfn/cfn-hup.conf":
+              content:
+                Fn::Sub: |
+                  [main]
+                  stack=${AWS::StackId}
+                  region=${AWS::Region}
+                  verbose=true
+                  interval=1
+              mode: '000400'
+              owner: root
+              group: root
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: 'true'
+                ensureRunning: 'true'
+                files:
+                  - "/etc/cfn/cfn-hup.conf"
+                  - "/etc/cfn/hooks.d/cfn-auto-reloader.conf"
+        install_software:
+          files:
+            "/tmp/install.sh":
+              content:
+                Fn::Join:
+                  - ''
+                  - - 'sudo tee /etc/yum.repos.d/mongodb-org-4.4.repo << EOF
+
+                    '
+                    - "[mongodb-org-4.4]\n"
+                    - 'name=MongoDB Repository
+
+                    '
+                    - 'baseurl=https://repo.mongodb.org/yum/amazon/2/mongodb-org/4.4/x86_64/
+
+                    '
+                    - 'gpgcheck=1
+
+                    '
+                    - 'enabled=1
+
+                    '
+                    - 'gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
+
+                    '
+                    - 'EOF
+
+                    '
+                    - 'sudo tee /etc/yum.repos.d/pritunl.repo << EOF
+
+                    '
+                    - "[pritunl]\n"
+                    - 'name=Pritunl Repository
+
+                    '
+                    - 'baseurl=https://repo.pritunl.com/stable/yum/amazonlinux/2/
+
+                    '
+                    - 'gpgcheck=1
+
+                    '
+                    - 'enabled=1
+
+                    '
+                    - 'EOF
+
+                    '
+                    - 'sudo rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+
+                    '
+                    - 'gpg --keyserver hkp://keyserver.ubuntu.com --recv-keys 7568D9BB55FF9E5287D586017AE645C0CF8E292A
+
+                    '
+                    - 'gpg --armor --export 7568D9BB55FF9E5287D586017AE645C0CF8E292A
+                    > key.tmp; sudo rpm --import key.tmp; rm -f key.tmp
+
+                    '
+                    - 'sudo yum -y install pritunl mongodb-org
+
+                    '
+                    - 'sudo systemctl start mongod pritunl
+
+                    '
+                    - 'sudo systemctl enable mongod pritunl
+
+                    '
+                    - 'sudo systemctl start mongod
+
+                    '
+                    - 'export MONGO_PASSWORD=$(< /dev/urandom tr -dc _A-Za-z0-9 | head
+                    -c${1:-32})
+
+                    '
+                    - "echo -e 'use admin; \ndb.createUser({user: \"admin\", pwd: \"'$MONGO_PASSWORD'\",
+                    roles: [ \"userAdminAnyDatabase\", \"dbAdminAnyDatabase\", \"readWriteAnyDatabase\"]});'
+                    | tee | mongo\n"
+                    - |
+                      echo -e '
+                      security:
+                        authorization: enabled
+                      ' | sudo tee -a /etc/mongod.conf
+                    - 'sudo systemctl restart mongod
+
+                    '
+                    - sudo pritunl set-mongodb "mongodb://admin:$MONGO_PASSWORD@localhost:27017/pritunl?authSource=admin"
+              mode: '000777'
+              owner: root
+              group: root
+        run:
+          commands:
+            01_runtmp:
+              command: sh install.sh
+              cwd: "/tmp/"
+            02_start_pritunl:
+              command: sudo systemctl start pritunl
+            03_enable_pritunl_mongod:
+              command: sudo systemctl enable pritunl mongod
+            04_restart_pritunl:
+              command: sudo systemctl restart pritunl
+            05_reload_daemon:
+              command: sudo systemctl daemon-reload
+        password:
+          commands:
+            01_getpassword:
+              command: sudo pritunl default-password > /var/Password.txt
+        upload_files:
+          commands:
+            01_upload_files:
+              cwd: "/var"
+              command:
+                Fn::Sub: 'aws s3 cp Password.txt s3://${S3Bucket}/client/Password.txt
+
+                  '
+        clear_files:
+          commands:
+            01_clean_certificate:
+              command: sudo rm -rf /tmp/install*
+
+
+Outputs:
+  S3BucketOut:
+    Description: S3 bucket name
+    Value:
+      Fn::Sub: https://s3.console.aws.amazon.com/s3/buckets/${S3Bucket}?region=${AWS::Region}&tab=objects
+  EIPOut:
+    Description: Instance EIP
+    Value:
+      Ref: EIP
+

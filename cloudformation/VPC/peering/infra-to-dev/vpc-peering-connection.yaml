@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'This templates creates a VPC Peering connection. (Requester Account ship-planner-infra-to-dev)'
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Network Configuration
+        Parameters:
+          - VpcId
+      - Label:
+          default: VPC Peering Configuration
+        Parameters:
+          - PeerName
+          - PeerOwnerId
+          - PeerVpcId
+    ParameterLabels:
+      PeerName:
+        default: Peer Name
+      PeerOwnerId:
+        default: Peer Owner ID
+      PeerVpcId:
+        default: Peer VPC ID
+      VpcId:
+        default: VPC ID
+
+Parameters:
+
+  VPCAccepterStackName:
+    Description: 'Name of an active CloudFormation stack that contains the networking
+      resources, such as the VPC for ship-planner--dev, that will be used in this
+      stack.'
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+    Default: ship-planner-dev-vpc # ship-planner--dev name
+
+  VPCRequesterStackName:
+    Description: 'Name of an active CloudFormation stack that contains the networking
+      resources, such as the VPC for ship-planner--infra-vpc, that will be used in this
+      stack.'
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+    Default: ship-planner-infra-vpc # ship-planner-infra-vpc name
+
+  PeerName:
+    Description: 'Name of the VPC Peer'
+    MaxLength: 255
+    Type: String
+    Default: ship-planner-infra-to-dev-peereng
+
+Resources:
+  VPCPeeringConnection:
+    Type: AWS::EC2::VPCPeeringConnection
+    Properties:
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: ${VPCRequesterStackName}-VPC # from ship-planner-infra-vpc
+      PeerVpcId:
+        Fn::ImportValue:
+          Fn::Sub: ${VPCAccepterStackName}-VPC # from ship-planner-dev-vpc
+      PeerOwnerId:
+        Fn::ImportValue:
+          Fn::Sub: ${VPCAccepterStackName}-VPCAccountId # from ship-planner-dev-vpc
+      Tags:
+        - Key: Name
+          Value: !Ref PeerName
+
+Outputs:
+  VPCPeeringConnectionId:
+    Description: VPC Peering Connection ID
+    Value: !Ref VPCPeeringConnection
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-VPCPeeringConnection # to vpc-peering-updates-route-dev.yaml & vpc-peering-updates-route-infra.yaml
