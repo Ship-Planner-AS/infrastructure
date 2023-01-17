@@ -8,10 +8,14 @@ Description: >-
 
 ## =================== PARAMETERS ===================
 Parameters:
+  EnvironmentName:
+    Description: 'An environment name that will be prefixed to resource names'
+    Type: String
+    Default: ship-planner-staging-iam-user-cloud-formation
   IAMUserName:
     Description: Unique name for a new user
     Type: String
-    Default: ship-planner-aws-staging-user-cloud-formation
+    Default: ship-planner-staging-user-cloud-formation
     ConstraintDescription: User name must be between 1 and 64 alphanumeric characters in length, starting with an uppercase or lowercase character of the alphabet.
   AWSSecurityGroups:
     Description: 'Comma-delimited list of group names  to which you want to add the user (optional)'
