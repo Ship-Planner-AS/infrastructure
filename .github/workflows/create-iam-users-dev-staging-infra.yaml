@@ -33,7 +33,7 @@ jobs:
       # Create Stack for Ship Planner staging iam user for cloud formation cloudformation/IAM/users/staging/iam-user-cloud-formation.yaml
       - name: Deploy Ship Planner staging iam user for cloud formation
         run: |
-          aws cloudformation deploy --stack-name ship-planner-staging-iam-user-cloud-formation
+          aws cloudformation deploy --stack-name ship-planner-staging-iam-user-cloud-formation \
             --template-file cloudformation/IAM/users/staging/iam-user-cloud-formation.yaml \
             --capabilities CAPABILITY_NAMED_IAM
 
@@ -42,7 +42,7 @@ jobs:
       # Create Stack for Ship Planner dev iam user for cloud formation cloudformation/IAM/users/dev/iam-user-cloud-formation.yaml
       - name: Deploy Ship Planner dev iam user for cloud formation
         run: |
-          aws cloudformation deploy --stack-name ship-planner-dev-iam-user-cloud-formation
+          aws cloudformation deploy --stack-name ship-planner-dev-iam-user-cloud-formation \
             --template-file cloudformation/IAM/users/dev/iam-user-cloud-formation.yaml \
             --capabilities CAPABILITY_NAMED_IAM
 
@@ -51,6 +51,6 @@ jobs:
       # Create Stack for Ship Planner Infra iam user for cloud formation cloudformation/IAM/users/Infra/iam-user-cloud-formation.yaml
       - name: Deploy Ship Planner Infra iam user for cloud formation
         run: |
-          aws cloudformation deploy --stack-name ship-planner-infra-iam-user-cloud-formation
+          aws cloudformation deploy --stack-name ship-planner-infra-iam-user-cloud-formation \
             --template-file cloudformation/IAM/users/Infra/iam-user-cloud-formation.yaml \
             --capabilities CAPABILITY_NAMED_IAM
