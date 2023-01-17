@@ -57,7 +57,7 @@ jobs:
         id: ship-planner-vpc-peering-infra-to-dev
         run: |
           aws cloudformation deploy --stack-name ship-planner-infra-to-dev-peereng \
-            --template-file cloudformation/VPC/infra-vpc/peereng/infra-to-dev/vpc-peering-connection.yaml \
+            --template-file cloudformation/VPC/peering/infra-to-dev/vpc-peering-connection.yaml \
             --capabilities CAPABILITY_NAMED_IAM
 
       # Create Stack for Update Route table in dev VPC cloudformation/VPC/infra-vpc/peereng/infra-to-dev/vpc-peering-updates-route-dev.yaml
@@ -65,7 +65,7 @@ jobs:
         id: ship-planner-update-vpc-route-table-dev-to-infra
         run: |
           aws cloudformation deploy --stack-name ship-planner-update-dev-to-infra-route \
-            --template-file cloudformation/VPC/infra-vpc/peereng/infra-to-dev/vpc-peering-updates-route-dev.yaml \
+            --template-file cloudformation/VPC/peering/infra-to-dev/vpc-peering-updates-route-dev.yaml \
             --capabilities CAPABILITY_NAMED_IAM
 
       # Create Stack for Update Route table in Infra VPC cloudformation/VPC/infra-vpc/peereng/infra-to-dev/vpc-peering-updates-route-infra.yaml
@@ -73,5 +73,5 @@ jobs:
         id: ship-planner-update-vpc-route-table-infra-to-dev
         run: |
           aws cloudformation deploy --stack-name ship-planner-update-infra-to-dev-route \
-            --template-file cloudformation/VPC/infra-vpc/peereng/infra-to-dev/vpc-peering-updates-route-infra.yaml \
+            --template-file cloudformation/VPC/peering/infra-to-dev/vpc-peering-updates-route-infra.yaml \
             --capabilities CAPABILITY_NAMED_IAM
