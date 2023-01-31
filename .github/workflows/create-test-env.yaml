@@ -1,0 +1,77 @@
+name: Create Test Envirovement
+
+# Controls when the action will run.
+on:
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      region:
+        description: "AWS Region"
+        required: true
+        default: "eu-central-1"
+
+################################################## Configure AWS credentials ###########################################################################################################################
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  cfn-deployment:
+    runs-on: ubuntu-latest
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Configure AWS credentials
+        id: creds
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ github.event.inputs.region }}
+
+      ################################################## VPC ###########################################################################################################################
+
+      # Create Stack for Ship Planner VPC test cloudformation/VPC/test-vpc/ship-planner-vpc.yaml
+      - name: Deploy Ship Planner VPC test
+        id: ship-planner-vps-test
+        run: |
+          aws cloudformation deploy --stack-name ship-planner-test-vpc \
+            --template-file cloudformation/VPC/test-vpc/ship-planner-vpc.yaml \
+            --capabilities CAPABILITY_NAMED_IAM
+
+      ################################################## Secutity Group ################################################################################################################
+
+      # Create Stack for Ship Planner VPC Peereng Secutity Group cloudformation/security-groups/vpc-peereng/test/vpc-peereng-sg.yaml
+      - name: Deploy Ship Planner VPC Peereng Secutity Group
+        id: ship-planner-vps-test-sg
+        run: |
+          aws cloudformation deploy --stack-name ship-planner-vpc-peereng-test-sg \
+            --template-file cloudformation/security-groups/vpc-peereng/test/vpc-peereng-sg.yaml \
+            --capabilities CAPABILITY_NAMED_IAM
+
+      ################################################## VPC Peereng ###########################################################################################################################
+
+      # Create Stack for Ship Planner VPC Peereng from infra VPC to test VPC cloudformation/VPC/infra-vpc/peereng/infra-to-test/vpc-peering-connection.yaml
+      - name: Create VPC Peereng from infra VPC to test VPC
+        id: ship-planner-vpc-peering-infra-to-test
+        run: |
+          aws cloudformation deploy --stack-name ship-planner-infra-to-test-peereng \
+            --template-file cloudformation/VPC/peering/infra-to-test/vpc-peering-connection.yaml \
+            --capabilities CAPABILITY_NAMED_IAM
+
+      # Create Stack for Update Route table in test VPC cloudformation/VPC/infra-vpc/peereng/infra-to-test/vpc-peering-updates-route-test.yaml
+      - name: Update Route table in test VPC
+        id: ship-planner-update-vpc-route-table-test-to-infra
+        run: |
+          aws cloudformation deploy --stack-name ship-planner-update-test-to-infra-route \
+            --template-file cloudformation/VPC/peering/infra-to-test/vpc-peering-updates-route-test.yaml \
+            --capabilities CAPABILITY_NAMED_IAM
+
+      # Create Stack for Update Route table in Infra VPC cloudformation/VPC/infra-vpc/peereng/infra-to-test/vpc-peering-updates-route-infra.yaml
+      - name: Update Route table in Infra VPC
+        id: ship-planner-update-vpc-route-table-infra-to-test
+        run: |
+          aws cloudformation deploy --stack-name ship-planner-update-infra-to-test-route \
+            --template-file cloudformation/VPC/peering/infra-to-test/vpc-peering-updates-route-infra.yaml \
+            --capabilities CAPABILITY_NAMED_IAM
