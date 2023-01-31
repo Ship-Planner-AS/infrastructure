@@ -85,7 +85,7 @@ Parameters:
     ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
     Description: CIDR of the VPC test Peer
     Type: String
-    Default: 10.4.0.0/16
+    Default: 10.5.0.0/16
 
 Resources:
 
